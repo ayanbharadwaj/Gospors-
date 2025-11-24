@@ -1,0 +1,40 @@
+{
+  "name": "Sponsor",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Full name or company name"
+    },
+    "username": {
+      "type": "string"
+    },
+    "bio": {
+      "type": "string",
+      "description": "About the sponsor"
+    },
+    "location": {
+      "type": "string"
+    },
+    "profile_image_url": {
+      "type": "string"
+    },
+    "website": {
+      "type": "string"
+    },
+    "sports_interested": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Sports they're interested in supporting"
+    },
+    "total_athletes_supported": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
