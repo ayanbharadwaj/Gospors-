@@ -59,7 +59,8 @@ export default function AthleteDashboard() {
     enabled: !!user,
   });
 
-  const myProfile = athleteProfiles[0];
+  // Ensure we pick the profile that was actually created by the signed-in user.
+  const myProfile = (athleteProfiles || []).find(p => p.created_by === user?.email) || null;
 
   useEffect(() => {
     if (myProfile) {
