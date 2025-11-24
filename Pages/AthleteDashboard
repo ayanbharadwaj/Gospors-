@@ -1,0 +1,562 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { 
+  Edit, Eye, Users, TrendingUp, Plus, X, Loader2, 
+  Upload, Save, Trash2, ExternalLink, Settings
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+export default function AthleteDashboard() {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [profileImage, setProfileImage] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [formData, setFormData] = useState({});
+  const [statKey, setStatKey] = useState('');
+  const [statValue, setStatValue] = useState('');
+  
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const isAuth = await base44.auth.isAuthenticated();
+        if (!isAuth) {
+          base44.auth.redirectToLogin(window.location.href);
+          return;
+        }
+        const userData = await base44.auth.me();
+        setUser(userData);
+      } catch (e) {
+        base44.auth.redirectToLogin(window.location.href);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const { data: athleteProfiles = [], isLoading: loadingProfiles } = useQuery({
+    queryKey: ['myAthleteProfile', user?.email],
+    queryFn: () => base44.entities.Athlete.filter({ created_by: user.email }),
+    enabled: !!user,
+  });
+
+  const myProfile = athleteProfiles[0];
+
+  useEffect(() => {
+    if (myProfile) {
+      setFormData(myProfile);
+      setProfileImage(myProfile.profile_image_url);
+    }
+  }, [myProfile]);
+
+  const updateMutation = useMutation({
+    mutationFn: (data) => base44.entities.Athlete.update(myProfile.id, {
+      ...data,
+      age: data.age ? parseInt(data.age) : null,
+      needs: data.needs?.filter(n => n.trim() !== '') || [],
+      profile_image_url: profileImage
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['myAthleteProfile']);
+      setEditMode(false);
+      toast.success('Profile updated!');
+    },
+  });
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      setProfileImage(file_url);
+      toast.success('Image uploaded!');
+    } catch (error) {
+      toast.error('Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const addNeed = () => {
+    setFormData(prev => ({
+      ...prev,
+      needs: [...(prev.needs || []), '']
+    }));
+  };
+
+  const removeNeed = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      needs: prev.needs.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateNeed = (index, value) => {
+    setFormData(prev => ({
+      ...prev,
+      needs: prev.needs.map((need, i) => i === index ? value : need)
+    }));
+  };
+
+  const addStat = () => {
+    if (!statKey.trim() || !statValue.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      stats: {
+        ...(prev.stats || {}),
+        [statKey]: statValue
+      }
+    }));
+    setStatKey('');
+    setStatValue('');
+  };
+
+  const removeStat = (key) => {
+    setFormData(prev => {
+      const newStats = { ...(prev.stats || {}) };
+      delete newStats[key];
+      return { ...prev, stats: newStats };
+    });
+  };
+
+  const sports = ['Basketball', 'Soccer', 'Track & Field', 'Tennis', 'Football', 'Swimming', 'Baseball', 'Volleyball', 'Other'];
+
+  const sportEmojis = {
+    'Basketball': '🏀',
+    'Soccer': '⚽',
+    'Track & Field': '🏃',
+    'Tennis': '🎾',
+    'Football': '🏈',
+    'Swimming': '🏊',
+    'Baseball': '⚾',
+    'Volleyball': '🏐',
+    'Other': '🏅'
+  };
+
+  if (isLoading || loadingProfiles) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-6">
+        <div className="max-w-4xl mx-auto">
+          <Skeleton className="h-8 w-48 mb-8" />
+          <div className="grid md:grid-cols-3 gap-4 mb-8">
+            {[1,2,3].map(i => (
+              <Skeleton key={i} className="h-32 rounded-2xl" />
+            ))}
+          </div>
+          <Skeleton className="h-96 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!myProfile) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Users className="w-10 h-10 text-purple-600" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">No Profile Yet</h2>
+          <p className="text-gray-600 mb-6">
+            Create your athlete profile to start connecting with sponsors
+          </p>
+          <Link to={createPageUrl('AthleteSignup')}>
+            <Button className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white">
+              <Plus className="w-4 h-4 mr-2" />
+              Create Profile
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white py-12">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-black mb-2">Athlete Dashboard</h1>
+              <p className="text-purple-100">Manage your profile and track your visibility</p>
+            </div>
+            <Link 
+              to={`${createPageUrl('AthleteProfile')}?id=${myProfile.id}`}
+              className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-lg font-semibold hover:bg-white/30 transition flex items-center gap-2"
+            >
+              <Eye className="w-4 h-4" />
+              View Public Profile
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto py-8 px-6">
+        {/* Stats Cards */}
+        <div className="grid md:grid-cols-3 gap-4 mb-8">
+          <Card className="bg-gradient-to-br from-violet-50 to-purple-50 border-purple-100">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 font-semibold">Profile Views</p>
+                  <p className="text-3xl font-black text-purple-600">--</p>
+                </div>
+                <div className="w-12 h-12 bg-purple-200 rounded-xl flex items-center justify-center">
+                  <Eye className="w-6 h-6 text-purple-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-fuchsia-50 to-pink-50 border-pink-100">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 font-semibold">Followers</p>
+                  <p className="text-3xl font-black text-pink-600">{myProfile.followers_count || 0}</p>
+                </div>
+                <div className="w-12 h-12 bg-pink-200 rounded-xl flex items-center justify-center">
+                  <Users className="w-6 h-6 text-pink-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-orange-50 to-yellow-50 border-yellow-100">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 font-semibold">Status</p>
+                  <p className="text-xl font-black text-orange-600">
+                    {myProfile.is_trending ? '🔥 Trending' : 'Active'}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-yellow-200 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-orange-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Profile Card */}
+        <Card className="shadow-xl border-0">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-2xl">My Profile</CardTitle>
+            <Button
+              variant={editMode ? "outline" : "default"}
+              onClick={() => setEditMode(!editMode)}
+              className={editMode ? "" : "bg-purple-600 hover:bg-purple-700"}
+            >
+              {editMode ? (
+                <>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </>
+              ) : (
+                <>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit Profile
+                </>
+              )}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {editMode ? (
+              <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(formData); }} className="space-y-6">
+                {/* Profile Image */}
+                <div>
+                  <Label className="text-base font-bold mb-3 block">Profile Photo</Label>
+                  <div className="flex items-center gap-6">
+                    <div className="w-24 h-24 bg-orange-500 rounded-2xl flex items-center justify-center overflow-hidden">
+                                        {profileImage ? (
+                                          <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : (
+                                          <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                                        )}
+                    </div>
+                    <div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="edit-profile-image"
+                      />
+                      <label
+                        htmlFor="edit-profile-image"
+                        className="cursor-pointer inline-flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-2 rounded-lg font-semibold hover:bg-purple-200 transition"
+                      >
+                        {uploadingImage ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                        Change Photo
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Basic Info */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="font-bold">Full Name</Label>
+                    <Input
+                      value={formData.name || ''}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Username</Label>
+                    <Input
+                      value={formData.username || ''}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Age</Label>
+                    <Input
+                      type="number"
+                      value={formData.age || ''}
+                      onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Sport</Label>
+                    <Select 
+                      value={formData.sport || ''} 
+                      onValueChange={(value) => setFormData({ ...formData, sport: value })}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sports.map(sport => (
+                          <SelectItem key={sport} value={sport}>{sport}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="font-bold">Location</Label>
+                    <Input
+                      value={formData.location || ''}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Phone</Label>
+                    <Input
+                      value={formData.phone || ''}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+
+                {/* Story */}
+                <div>
+                  <Label className="font-bold">Your Story</Label>
+                  <Textarea
+                    value={formData.story || ''}
+                    onChange={(e) => setFormData({ ...formData, story: e.target.value })}
+                    className="mt-2 min-h-32"
+                  />
+                </div>
+
+                {/* Highlight URL */}
+                <div>
+                  <Label className="font-bold">Highlight Video URL</Label>
+                  <Input
+                    type="url"
+                    value={formData.highlight_url || ''}
+                    onChange={(e) => setFormData({ ...formData, highlight_url: e.target.value })}
+                    className="mt-2"
+                  />
+                </div>
+
+                {/* Needs */}
+                <div>
+                  <Label className="font-bold mb-3 block">What Do You Need?</Label>
+                  <div className="space-y-3">
+                    {(formData.needs || []).map((need, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          value={need}
+                          onChange={(e) => updateNeed(index, e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeNeed(index)}
+                          className="text-red-500 hover:text-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" onClick={addNeed} className="w-full border-dashed">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Need
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div>
+                  <Label className="font-bold mb-3 block">Performance Stats</Label>
+                  {formData.stats && Object.keys(formData.stats).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {Object.entries(formData.stats).map(([key, value]) => (
+                        <div key={key} className="bg-purple-100 text-purple-700 px-3 py-2 rounded-lg flex items-center gap-2">
+                          <span className="font-bold">{key}:</span>
+                          <span>{value}</span>
+                          <button type="button" onClick={() => removeStat(key)}>
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      value={statKey}
+                      onChange={(e) => setStatKey(e.target.value)}
+                      placeholder="Stat name"
+                      className="flex-1"
+                    />
+                    <Input
+                      value={statValue}
+                      onChange={(e) => setStatValue(e.target.value)}
+                      placeholder="Value"
+                      className="w-32"
+                    />
+                    <Button type="button" variant="outline" onClick={addStat}>Add</Button>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t">
+                  <Button
+                    type="submit"
+                    disabled={updateMutation.isPending}
+                    className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 py-6 font-bold"
+                  >
+                    {updateMutation.isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+                    ) : (
+                      <><Save className="w-4 h-4 mr-2" /> Save Changes</>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-6">
+                {/* Profile Preview */}
+                <div className="flex items-center gap-6">
+                  <div className="w-24 h-24 bg-orange-500 rounded-2xl flex items-center justify-center overflow-hidden">
+                    {myProfile.profile_image_url ? (
+                      <img src={myProfile.profile_image_url} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold">{myProfile.name}</h3>
+                    <p className="text-gray-500">@{myProfile.username || 'username'}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">
+                        {myProfile.sport}
+                      </span>
+                      {myProfile.location && (
+                        <span className="text-gray-500 text-sm">{myProfile.location}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                {myProfile.stats && Object.keys(myProfile.stats).length > 0 && (
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h4 className="font-bold mb-3">Stats</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      {Object.entries(myProfile.stats).map(([key, value]) => (
+                        <div key={key} className="text-center">
+                          <div className="text-2xl font-black text-purple-600">{value}</div>
+                          <div className="text-xs text-gray-500 uppercase">{key}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Story */}
+                <div>
+                  <h4 className="font-bold mb-2">Story</h4>
+                  <p className="text-gray-700">{myProfile.story}</p>
+                </div>
+
+                {/* Needs */}
+                {myProfile.needs && myProfile.needs.length > 0 && (
+                  <div>
+                    <h4 className="font-bold mb-2">Needs</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {myProfile.needs.map((need, i) => (
+                        <span key={i} className="bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full text-sm border border-yellow-200">
+                          {need}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Highlight */}
+                {myProfile.highlight_url && (
+                  <div>
+                    <h4 className="font-bold mb-2">Highlight Video</h4>
+                    <a 
+                      href={myProfile.highlight_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-purple-600 hover:underline flex items-center gap-2"
+                    >
+                      {myProfile.highlight_url}
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
