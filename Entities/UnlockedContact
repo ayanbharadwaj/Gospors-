@@ -1,0 +1,26 @@
+{
+  "name": "UnlockedContact",
+  "type": "object",
+  "properties": {
+    "sponsor_email": {
+      "type": "string",
+      "description": "Email of the sponsor who paid"
+    },
+    "athlete_id": {
+      "type": "string",
+      "description": "ID of the unlocked athlete"
+    },
+    "amount_paid": {
+      "type": "number",
+      "description": "Fee paid to unlock"
+    },
+    "unlocked_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "sponsor_email",
+    "athlete_id"
+  ]
+}
