@@ -1,0 +1,423 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { 
+  MapPin, Users, Flame, Heart, Play, Mail, Phone, 
+  ArrowLeft, Lock, Check, Star, Shield, Loader2 
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from 'sonner';
+
+const ACCESS_FEE = 9.99;
+
+export default function AthleteProfile() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const athleteId = urlParams.get('id');
+  
+  const [user, setUser] = useState(null);
+  const [showUnlockDialog, setShowUnlockDialog] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const isAuth = await base44.auth.isAuthenticated();
+        if (isAuth) {
+          const userData = await base44.auth.me();
+          setUser(userData);
+        }
+      } catch (e) {
+        // Not logged in
+      }
+    };
+    loadUser();
+  }, []);
+
+  const { data: athlete, isLoading } = useQuery({
+    queryKey: ['athlete', athleteId],
+    queryFn: async () => {
+      const athletes = await base44.entities.Athlete.filter({ id: athleteId });
+      return athletes[0];
+    },
+    enabled: !!athleteId,
+  });
+
+  const { data: unlockedContacts = [] } = useQuery({
+    queryKey: ['unlockedContacts', user?.email],
+    queryFn: () => user ? base44.entities.UnlockedContact.filter({ sponsor_email: user.email }) : [],
+    enabled: !!user,
+  });
+
+  const isUnlocked = unlockedContacts.some(uc => uc.athlete_id === athleteId);
+
+  const unlockMutation = useMutation({
+    mutationFn: async () => {
+      await base44.entities.UnlockedContact.create({
+        sponsor_email: user.email,
+        athlete_id: athleteId,
+        amount_paid: ACCESS_FEE,
+        unlocked_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['unlockedContacts']);
+      setShowUnlockDialog(false);
+      toast.success('Contact information unlocked!');
+    },
+  });
+
+  const handleUnlock = async () => {
+    if (!user) {
+      base44.auth.redirectToLogin(window.location.href);
+      return;
+    }
+    setShowUnlockDialog(true);
+  };
+
+  const processPayment = async () => {
+    setIsProcessing(true);
+    // Simulate payment processing
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await unlockMutation.mutateAsync();
+    setIsProcessing(false);
+  };
+
+  const sportEmojis = {
+    'Basketball': '🏀',
+    'Soccer': '⚽',
+    'Track & Field': '🏃',
+    'Tennis': '🎾',
+    'Football': '🏈',
+    'Swimming': '🏊',
+    'Baseball': '⚾',
+    'Volleyball': '🏐',
+    'Other': '🏅'
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-6">
+        <div className="max-w-5xl mx-auto">
+          <Skeleton className="h-8 w-32 mb-6" />
+          <div className="bg-white rounded-3xl overflow-hidden">
+            <Skeleton className="h-48 w-full" />
+            <div className="p-8">
+              <div className="flex items-end gap-6 -mt-20 mb-6">
+                <Skeleton className="w-32 h-32 rounded-3xl" />
+                <div className="flex-1">
+                  <Skeleton className="h-8 w-48 mb-2" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </div>
+              <Skeleton className="h-24 w-full mb-8" />
+              <Skeleton className="h-40 w-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!athlete) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">Athlete not found</h2>
+          <Link to={createPageUrl('Discover')} className="text-orange-600 hover:underline">
+            Back to Discover
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto py-8 px-6">
+        <Link 
+          to={createPageUrl('Discover')}
+          className="text-orange-600 mb-6 hover:underline font-semibold flex items-center gap-2 inline-flex"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Discover
+        </Link>
+
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+          {/* Profile Info */}
+          <div className="px-6 md:px-8 py-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+              <div className="flex items-end gap-4">
+                <div className="w-28 h-28 md:w-32 md:h-32 bg-orange-500 rounded-3xl flex items-center justify-center border-4 border-white shadow-xl flex-shrink-0">
+                  {athlete.profile_image_url ? (
+                    <img 
+                      src={athlete.profile_image_url} 
+                      alt={athlete.name}
+                      className="w-full h-full object-cover rounded-3xl"
+                    />
+                  ) : (
+                    <svg className="w-16 h-16 md:w-20 md:h-20 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                  )}
+                </div>
+                <div className="pb-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="text-3xl md:text-4xl font-black">{athlete.name}</h1>
+                    {athlete.is_trending && (
+                      <div className="bg-gradient-to-r from-orange-400 to-red-400 text-white px-3 py-1 rounded-full font-bold flex items-center gap-1 text-sm">
+                        <Flame className="w-4 h-4" />
+                        Trending
+                      </div>
+                    )}
+                  </div>
+                  {athlete.username && (
+                    <p className="text-gray-500 text-lg">@{athlete.username}</p>
+                  )}
+                </div>
+              </div>
+              
+              {!isUnlocked && (
+                <Button 
+                  onClick={handleUnlock}
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-6 rounded-full font-bold hover:scale-105 transition-transform shadow-lg"
+                >
+                  <Lock className="w-5 h-5 mr-2" />
+                  Unlock Contact - ${ACCESS_FEE}
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 md:gap-6 text-gray-600 flex-wrap mb-8">
+              {athlete.location && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  <span>{athlete.location}</span>
+                </div>
+              )}
+              <div className="bg-orange-100 text-orange-700 px-4 py-2 rounded-full font-bold">
+                {athlete.sport}
+              </div>
+              {athlete.age && (
+                <span className="text-gray-600">{athlete.age} years old</span>
+              )}
+              {athlete.followers_count > 0 && (
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  <span className="font-semibold">{athlete.followers_count.toLocaleString()} followers</span>
+                </div>
+              )}
+            </div>
+
+            {/* Stats Dashboard */}
+            {athlete.stats && Object.keys(athlete.stats).length > 0 && (
+              <div className="grid grid-cols-3 gap-4 md:gap-6 mb-8">
+                {Object.entries(athlete.stats).map(([key, value]) => (
+                  <div key={key} className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-4 md:p-6 text-center border border-orange-100">
+                    <div className="font-black text-3xl md:text-4xl bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent mb-2">
+                      {value}
+                    </div>
+                    <div className="text-gray-600 font-semibold uppercase text-xs md:text-sm">{key}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Story */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-black mb-4">About</h2>
+              <p className="text-gray-700 text-lg leading-relaxed">{athlete.story}</p>
+            </div>
+
+            {/* Needs */}
+            {athlete.needs && athlete.needs.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-2xl font-black mb-4">What I Need</h2>
+                <div className="space-y-3">
+                  {athlete.needs.map((need, index) => (
+                    <div key={index} className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-4 flex items-center gap-3 border border-yellow-200">
+                      <div className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <span className="text-gray-800 font-semibold">{need}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Highlights */}
+            {athlete.highlight_url && (
+              <div className="mb-8">
+                <h2 className="text-2xl font-black mb-4">Highlights</h2>
+                <a 
+                  href={athlete.highlight_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-2xl py-6 font-bold flex items-center justify-center gap-3 hover:scale-[1.02] transition-transform shadow-lg"
+                >
+                  <Play className="w-8 h-8 fill-white" />
+                  <span className="text-xl">Watch Game Highlights</span>
+                </a>
+              </div>
+            )}
+
+            {/* Contact Section */}
+            <div className="bg-gradient-to-br from-slate-50 to-orange-50 rounded-2xl p-6 md:p-8 border border-orange-100">
+              <h2 className="text-2xl font-black mb-6">Contact Information</h2>
+              
+              {isUnlocked ? (
+                <div className="space-y-4">
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                      <Check className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-green-800">Contact Unlocked</p>
+                      <p className="text-green-700 text-sm">You have full access to contact this athlete</p>
+                    </div>
+                  </div>
+                  
+                  {athlete.email && (
+                    <a 
+                      href={`mailto:${athlete.email}`}
+                      className="flex items-center gap-4 p-4 bg-white rounded-xl hover:shadow-md transition border border-gray-200"
+                    >
+                      <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center">
+                        <Mail className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 font-semibold">Email</div>
+                        <div className="text-orange-600 font-bold">{athlete.email}</div>
+                      </div>
+                    </a>
+                  )}
+                  
+                  {athlete.phone && (
+                    <a 
+                      href={`tel:${athlete.phone}`}
+                      className="flex items-center gap-4 p-4 bg-white rounded-xl hover:shadow-md transition border border-gray-200"
+                    >
+                      <div className="w-12 h-12 bg-gradient-to-br from-fuchsia-500 to-pink-600 rounded-xl flex items-center justify-center">
+                        <Phone className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 font-semibold">Phone</div>
+                        <div className="text-orange-600 font-bold">{athlete.phone}</div>
+                      </div>
+                    </a>
+                  )}
+                  
+                  <p className="text-gray-600 mt-6 text-center">
+                    💜 Reach out to discuss how you can support {athlete.name.split(' ')[0]}'s journey!
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Lock className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Contact Information Locked</h3>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    Pay a one-time access fee of <span className="font-bold">${ACCESS_FEE}</span> to unlock this athlete's contact details and connect directly.
+                  </p>
+                  <Button 
+                    onClick={handleUnlock}
+                    className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-6 rounded-full font-bold hover:scale-105 transition-transform shadow-lg"
+                  >
+                    <Lock className="w-5 h-5 mr-2" />
+                    Unlock Contact - ${ACCESS_FEE}
+                  </Button>
+                  <div className="flex items-center justify-center gap-2 mt-4 text-gray-500 text-sm">
+                    <Shield className="w-4 h-4" />
+                    <span>Secure payment · One-time fee</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Unlock Dialog */}
+      <Dialog open={showUnlockDialog} onOpenChange={setShowUnlockDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Unlock Contact Details</DialogTitle>
+            <DialogDescription>
+              Get direct access to {athlete?.name}'s contact information
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="bg-purple-50 rounded-xl p-4 mb-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-orange-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                </div>
+                <div>
+                  <h4 className="font-bold">{athlete?.name}</h4>
+                  <p className="text-gray-500 text-sm">{athlete?.sport} · {athlete?.location}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-b border-gray-200 py-4 mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">Access Fee</span>
+                <span className="font-bold">${ACCESS_FEE}</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                One-time payment for lifetime access to this athlete's contact details
+              </p>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Full email and phone access</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Direct communication with athlete</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Secure and private</span>
+              </div>
+            </div>
+
+            <Button 
+              onClick={processPayment}
+              disabled={isProcessing}
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-6 rounded-xl font-bold"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>Pay ${ACCESS_FEE} & Unlock</>
+              )}
+            </Button>
+
+            <div className="flex items-center justify-center gap-2 mt-4 text-gray-500 text-xs">
+              <Shield className="w-3 h-3" />
+              <span>Secure payment processed safely</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
