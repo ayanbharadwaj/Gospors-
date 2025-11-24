@@ -1,0 +1,263 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { Trophy, TrendingUp, Heart, Award, Shield, Users, Star, ArrowRight } from 'lucide-react';
+
+export default function Home() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-br from-orange-500 via-orange-500 to-amber-500 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-20 left-20 w-72 h-72 bg-white rounded-full blur-3xl"></div>
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-pink-300 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-violet-300 rounded-full blur-3xl"></div>
+        </div>
+        
+        <div className="relative max-w-6xl mx-auto py-28 px-6 text-center">
+          <div className="inline-block mb-6 px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-sm font-semibold border border-white/30">
+            🚀 The Future of Athletic Sponsorship
+          </div>
+          <h1 className="text-5xl md:text-7xl font-black mb-6 leading-tight">
+            Discover Tomorrow's<br/>Champions Today
+          </h1>
+          <p className="text-xl md:text-2xl mb-10 text-orange-100 max-w-3xl mx-auto leading-relaxed">
+            Connect with rising athletic stars, support their dreams with equipment and funding, and be part of their journey to greatness
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link 
+              to={createPageUrl('Discover')}
+              className="bg-white text-orange-600 px-10 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-2xl inline-flex items-center justify-center gap-2"
+            >
+              Explore Athletes
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+            <Link 
+              to={createPageUrl('AthleteSignup')}
+              className="bg-purple-800/50 backdrop-blur-sm text-white px-10 py-4 rounded-full font-bold text-lg hover:bg-purple-800/70 transition border-2 border-white/30 inline-flex items-center justify-center"
+            >
+              I'm an Athlete
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Bar */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white py-10">
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          <div>
+            <div className="text-3xl md:text-4xl font-black mb-2 bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">1.2K+</div>
+            <div className="text-slate-400 font-semibold text-sm md:text-base">Rising Athletes</div>
+          </div>
+          <div>
+            <div className="text-3xl md:text-4xl font-black mb-2 bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">$2.4M</div>
+            <div className="text-slate-400 font-semibold text-sm md:text-base">Support Raised</div>
+          </div>
+          <div>
+            <div className="text-3xl md:text-4xl font-black mb-2 bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">850+</div>
+            <div className="text-slate-400 font-semibold text-sm md:text-base">Active Sponsors</div>
+          </div>
+          <div>
+            <div className="text-3xl md:text-4xl font-black mb-2 bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">15</div>
+            <div className="text-slate-400 font-semibold text-sm md:text-base">Sports Categories</div>
+          </div>
+        </div>
+      </div>
+
+      {/* How It Works */}
+      <div className="max-w-6xl mx-auto py-24 px-6">
+        <div className="text-center mb-16">
+          <div className="inline-block px-4 py-2 bg-orange-100 text-orange-700 rounded-full text-sm font-bold mb-4">
+            HOW IT WORKS
+          </div>
+          <h2 className="text-4xl md:text-5xl font-black mb-4 bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">
+            Simple Steps to Make an Impact
+          </h2>
+          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
+            Whether you're an athlete seeking support or a sponsor looking to help, we've made the process seamless
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="relative">
+            <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg">
+              1
+            </div>
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-3xl p-8 pt-12 hover:shadow-2xl transition-shadow border border-orange-100 h-full">
+              <div className="bg-gradient-to-br from-orange-500 to-orange-600 w-16 h-16 rounded-2xl flex items-center justify-center mb-6">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold mb-3">Browse Athletes</h3>
+              <p className="text-gray-600 leading-relaxed">Explore profiles of talented young athletes. Filter by sport, location, or specific needs they have.</p>
+            </div>
+          </div>
+          
+          <div className="relative">
+            <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg">
+              2
+            </div>
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-3xl p-8 pt-12 hover:shadow-2xl transition-shadow border border-amber-100 h-full">
+              <div className="bg-gradient-to-br from-amber-500 to-yellow-600 w-16 h-16 rounded-2xl flex items-center justify-center mb-6">
+                <Star className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold mb-3">Watch Highlights</h3>
+              <p className="text-gray-600 leading-relaxed">See their talent in action through uploaded game highlights and training videos.</p>
+            </div>
+          </div>
+          
+          <div className="relative">
+            <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg">
+              3
+            </div>
+            <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-3xl p-8 pt-12 hover:shadow-2xl transition-shadow border border-red-100 h-full">
+              <div className="bg-gradient-to-br from-red-500 to-rose-600 w-16 h-16 rounded-2xl flex items-center justify-center mb-6">
+                <Heart className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold mb-3">Connect & Support</h3>
+              <p className="text-gray-600 leading-relaxed">Unlock contact details with a small access fee and directly support athletes with what they need.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* For Athletes Section */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 py-24">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-block px-4 py-2 bg-orange-500/20 text-orange-300 rounded-full text-sm font-bold mb-4">
+                FOR ATHLETES
+              </div>
+              <h2 className="text-4xl md:text-5xl font-black mb-6 text-white">
+                Showcase Your Talent,<br/>Find Your Sponsor
+              </h2>
+              <p className="text-slate-300 text-lg mb-8 leading-relaxed">
+                Create your profile, upload your highlights, and let sponsors discover you. We help connect talented young athletes with people who want to support their dreams.
+              </p>
+              <ul className="space-y-4 mb-8">
+                <li className="flex items-center gap-3 text-slate-300">
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                  </div>
+                  Free profile creation
+                </li>
+                <li className="flex items-center gap-3 text-slate-300">
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                  </div>
+                  Upload highlight videos
+                </li>
+                <li className="flex items-center gap-3 text-slate-300">
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                  </div>
+                  List your specific needs
+                </li>
+                <li className="flex items-center gap-3 text-slate-300">
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                  </div>
+                  Connect with verified sponsors
+                </li>
+              </ul>
+              <Link 
+                to={createPageUrl('AthleteSignup')}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-8 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-xl inline-flex items-center gap-2"
+              >
+                Create Your Profile
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+            </div>
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-amber-500/20 rounded-3xl blur-3xl"></div>
+              <div className="relative bg-gradient-to-br from-orange-600/20 to-amber-600/20 backdrop-blur-sm rounded-3xl p-8 border border-white/10">
+                <div className="bg-white rounded-2xl p-6 shadow-2xl">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center">
+                      <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-lg">Marcus Johnson</h4>
+                      <p className="text-gray-500 text-sm">@marcushoops · Basketball</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-600 text-sm mb-4">
+                    "Gospors helped me connect with sponsors who believed in my dream. Now I have proper training equipment!"
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {[1,2,3,4,5].map(i => (
+                      <Star key={i} className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Trust Section */}
+      <div className="max-w-6xl mx-auto py-24 px-6">
+        <div className="text-center mb-16">
+          <div className="inline-block px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-bold mb-4">
+            TRUSTED & SECURE
+          </div>
+          <h2 className="text-4xl md:text-5xl font-black mb-4 bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">
+            Safe & Transparent Platform
+          </h2>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="bg-white rounded-3xl p-8 shadow-lg border border-gray-100 flex gap-6">
+            <div className="bg-gradient-to-br from-green-500 to-emerald-600 w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <Shield className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold mb-2">Privacy Protected</h3>
+              <p className="text-gray-600">Athlete contact information is only revealed after sponsors complete the access fee, ensuring privacy and serious inquiries only.</p>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-3xl p-8 shadow-lg border border-gray-100 flex gap-6">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <Award className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold mb-2">Verified Profiles</h3>
+              <p className="text-gray-600">All athlete profiles are reviewed to ensure authenticity and appropriate content before being published.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA Section */}
+      <div className="max-w-4xl mx-auto px-6 pb-24">
+        <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-12 text-center text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl"></div>
+          </div>
+          <div className="relative">
+            <h2 className="text-4xl md:text-5xl font-black mb-4">Ready to Make History?</h2>
+            <p className="text-lg text-orange-100 mb-8 max-w-2xl mx-auto">
+              Join thousands of sponsors discovering and supporting the next generation of athletic greatness
+            </p>
+            <Link 
+              to={createPageUrl('Discover')}
+              className="bg-white text-orange-600 px-10 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform shadow-xl inline-block"
+            >
+              Start Exploring Athletes
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
