@@ -1,0 +1,204 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Search, Filter, SlidersHorizontal } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import AthleteCard from '@/components/athletes/AthleteCard';
+
+export default function Discover() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSport, setSelectedSport] = useState('all');
+  const [likedAthletes, setLikedAthletes] = useState(new Set());
+  const [bookmarkedAthletes, setBookmarkedAthletes] = useState(new Set());
+  const [user, setUser] = useState(null);
+
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const isAuth = await base44.auth.isAuthenticated();
+        if (isAuth) {
+          const userData = await base44.auth.me();
+          setUser(userData);
+        }
+      } catch (e) {
+        // Not logged in
+      }
+    };
+    loadUser();
+  }, []);
+
+  const { data: athletes = [], isLoading } = useQuery({
+    queryKey: ['athletes'],
+    queryFn: () => base44.entities.Athlete.list('-created_date', 50),
+  });
+
+  const { data: favorites = [] } = useQuery({
+    queryKey: ['favorites', user?.email],
+    queryFn: () => user ? base44.entities.SponsorFavorite.filter({ sponsor_email: user.email }) : [],
+    enabled: !!user,
+  });
+
+  useEffect(() => {
+    if (favorites.length > 0) {
+      setBookmarkedAthletes(new Set(favorites.map(f => f.athlete_id)));
+    }
+  }, [favorites]);
+
+  const addFavoriteMutation = useMutation({
+    mutationFn: (athleteId) => base44.entities.SponsorFavorite.create({
+      sponsor_email: user.email,
+      athlete_id: athleteId
+    }),
+    onSuccess: () => queryClient.invalidateQueries(['favorites']),
+  });
+
+  const removeFavoriteMutation = useMutation({
+    mutationFn: async (athleteId) => {
+      const fav = favorites.find(f => f.athlete_id === athleteId);
+      if (fav) await base44.entities.SponsorFavorite.delete(fav.id);
+    },
+    onSuccess: () => queryClient.invalidateQueries(['favorites']),
+  });
+
+  const toggleLike = (athleteId) => {
+    const newLikes = new Set(likedAthletes);
+    if (newLikes.has(athleteId)) {
+      newLikes.delete(athleteId);
+    } else {
+      newLikes.add(athleteId);
+    }
+    setLikedAthletes(newLikes);
+  };
+
+  const toggleBookmark = async (athleteId) => {
+    if (!user) {
+      base44.auth.redirectToLogin(window.location.href);
+      return;
+    }
+
+    if (bookmarkedAthletes.has(athleteId)) {
+      removeFavoriteMutation.mutate(athleteId);
+      const newBookmarks = new Set(bookmarkedAthletes);
+      newBookmarks.delete(athleteId);
+      setBookmarkedAthletes(newBookmarks);
+    } else {
+      addFavoriteMutation.mutate(athleteId);
+      const newBookmarks = new Set(bookmarkedAthletes);
+      newBookmarks.add(athleteId);
+      setBookmarkedAthletes(newBookmarks);
+    }
+  };
+
+  const filteredAthletes = athletes.filter(athlete => {
+    const matchesSport = selectedSport === 'all' || athlete.sport === selectedSport;
+    const matchesSearch = !searchTerm || 
+      athlete.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      athlete.sport?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      athlete.location?.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesSport && matchesSearch;
+  });
+
+  const sports = ['Basketball', 'Soccer', 'Track & Field', 'Tennis', 'Football', 'Swimming', 'Baseball', 'Volleyball', 'Other'];
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-16">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <h1 className="text-4xl md:text-5xl font-black mb-4">Discover Rising Athletes</h1>
+          <p className="text-orange-100 text-lg max-w-2xl mx-auto">
+            Browse profiles of talented young athletes looking for sponsors to support their journey
+          </p>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto py-8 px-6">
+        {/* Filter Bar */}
+        <div className="bg-white rounded-2xl shadow-sm p-4 mb-8 sticky top-4 z-10 border border-gray-100">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            <div className="flex-1 flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2">
+              <Search className="w-5 h-5 text-gray-400" />
+              <Input 
+                type="text" 
+                placeholder="Search athletes by name, sport, or location..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-transparent flex-1 outline-none border-0 shadow-none focus-visible:ring-0"
+              />
+            </div>
+            <Select value={selectedSport} onValueChange={setSelectedSport}>
+              <SelectTrigger className="w-full sm:w-48 bg-gray-50 border-0 rounded-xl">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="All Sports" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sports</SelectItem>
+                {sports.map(sport => (
+                  <SelectItem key={sport} value={sport}>{sport}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Results count */}
+        <div className="mb-6 flex items-center justify-between">
+          <p className="text-gray-600">
+            <span className="font-bold text-gray-900">{filteredAthletes.length}</span> athletes found
+          </p>
+          {selectedSport !== 'all' && (
+            <button 
+              onClick={() => setSelectedSport('all')}
+              className="text-orange-600 hover:text-purple-700 font-semibold text-sm"
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
+
+        {/* Athletes Feed */}
+        <div className="space-y-6">
+          {isLoading ? (
+            Array(3).fill(0).map((_, i) => (
+              <div key={i} className="bg-white rounded-3xl p-6 border border-gray-100">
+                <div className="flex items-center gap-4 mb-4">
+                  <Skeleton className="w-14 h-14 rounded-full" />
+                  <div>
+                    <Skeleton className="h-5 w-32 mb-2" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-3/4 mb-4" />
+                <Skeleton className="h-24 w-full rounded-xl" />
+              </div>
+            ))
+          ) : filteredAthletes.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Search className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No athletes found</h3>
+              <p className="text-gray-600">Try adjusting your search or filters</p>
+            </div>
+          ) : (
+            filteredAthletes.map(athlete => (
+              <AthleteCard
+                key={athlete.id}
+                athlete={athlete}
+                isLiked={likedAthletes.has(athlete.id)}
+                isBookmarked={bookmarkedAthletes.has(athlete.id)}
+                onToggleLike={toggleLike}
+                onToggleBookmark={toggleBookmark}
+              />
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
