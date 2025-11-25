@@ -1,0 +1,504 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { 
+  FileText, Clock, CheckCircle, XCircle, Send, 
+  ArrowLeft, Loader2, User, Calendar, DollarSign,
+  MessageSquare, Filter, Eye
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+
+export default function SponsorshipApplications() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const athleteIdParam = urlParams.get('athleteId');
+  
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showNewApplication, setShowNewApplication] = useState(!!athleteIdParam);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [responseMessage, setResponseMessage] = useState('');
+  
+  const [newApp, setNewApp] = useState({
+    athlete_id: athleteIdParam || '',
+    sponsorship_type: '',
+    amount: '',
+    duration: '',
+    message: '',
+    custom_terms: ''
+  });
+
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const isAuth = await base44.auth.isAuthenticated();
+        if (!isAuth) {
+          base44.auth.redirectToLogin(window.location.href);
+          return;
+        }
+        const userData = await base44.auth.me();
+        setUser(userData);
+      } catch (e) {
+        base44.auth.redirectToLogin(window.location.href);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Get applications (sent by sponsor or received by athlete)
+  const { data: applications = [], isLoading: loadingApps } = useQuery({
+    queryKey: ['applications', user?.email],
+    queryFn: async () => {
+      const sent = await base44.entities.SponsorshipApplication.filter({ sponsor_email: user.email });
+      const myAthletes = await base44.entities.Athlete.filter({ created_by: user.email });
+      let received = [];
+      if (myAthletes.length > 0) {
+        received = await base44.entities.SponsorshipApplication.filter({ athlete_id: myAthletes[0].id });
+      }
+      return { sent, received, myAthleteId: myAthletes[0]?.id };
+    },
+    enabled: !!user?.email,
+  });
+
+  // Get athletes for application form
+  const { data: athletes = [] } = useQuery({
+    queryKey: ['allAthletes'],
+    queryFn: () => base44.entities.Athlete.list(),
+  });
+
+  // Get athlete for param
+  const selectedAthlete = athletes.find(a => a.id === athleteIdParam);
+
+  const createApplicationMutation = useMutation({
+    mutationFn: (data) => base44.entities.SponsorshipApplication.create({
+      ...data,
+      sponsor_email: user.email,
+      amount: data.amount ? parseFloat(data.amount) : null,
+      status: 'pending'
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['applications']);
+      setShowNewApplication(false);
+      setNewApp({ athlete_id: '', sponsorship_type: '', amount: '', duration: '', message: '', custom_terms: '' });
+      toast.success('Application sent successfully!');
+    },
+  });
+
+  const updateApplicationMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.SponsorshipApplication.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['applications']);
+      setSelectedApplication(null);
+      setResponseMessage('');
+      toast.success('Application updated!');
+    },
+  });
+
+  const handleSubmitApplication = (e) => {
+    e.preventDefault();
+    if (!newApp.athlete_id || !newApp.sponsorship_type) {
+      toast.error('Please select an athlete and sponsorship type');
+      return;
+    }
+    createApplicationMutation.mutate(newApp);
+  };
+
+  const handleRespond = (status) => {
+    updateApplicationMutation.mutate({
+      id: selectedApplication.id,
+      data: {
+        status,
+        response_message: responseMessage,
+        responded_at: new Date().toISOString()
+      }
+    });
+  };
+
+  const getStatusBadge = (status) => {
+    const styles = {
+      pending: 'bg-yellow-100 text-yellow-700',
+      accepted: 'bg-green-100 text-green-700',
+      declined: 'bg-red-100 text-red-700',
+      withdrawn: 'bg-gray-100 text-gray-700'
+    };
+    return <Badge className={styles[status]}>{status}</Badge>;
+  };
+
+  const getAthleteName = (athleteId) => {
+    const athlete = athletes.find(a => a.id === athleteId);
+    return athlete?.name || 'Unknown Athlete';
+  };
+
+  const filteredSent = statusFilter === 'all' 
+    ? applications.sent 
+    : applications.sent?.filter(a => a.status === statusFilter);
+    
+  const filteredReceived = statusFilter === 'all'
+    ? applications.received
+    : applications.received?.filter(a => a.status === statusFilter);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-12">
+        <div className="max-w-4xl mx-auto px-6">
+          <h1 className="text-3xl md:text-4xl font-black mb-2">Sponsorship Applications</h1>
+          <p className="text-orange-100">Manage your sponsorship requests and offers</p>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto py-8 px-6">
+        {/* Actions */}
+        <div className="flex flex-wrap gap-4 mb-6 justify-between items-center">
+          <Button 
+            onClick={() => setShowNewApplication(true)}
+            className="bg-orange-500 hover:bg-orange-600"
+          >
+            <Send className="w-4 h-4 mr-2" />
+            New Application
+          </Button>
+          
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-40">
+              <Filter className="w-4 h-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="accepted">Accepted</SelectItem>
+              <SelectItem value="declined">Declined</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Tabs defaultValue="sent" className="space-y-6">
+          <TabsList className="bg-white border p-1 rounded-xl">
+            <TabsTrigger value="sent" className="rounded-lg data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+              <Send className="w-4 h-4 mr-2" />
+              Sent ({applications.sent?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger value="received" className="rounded-lg data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+              <FileText className="w-4 h-4 mr-2" />
+              Received ({applications.received?.length || 0})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="sent">
+            {loadingApps ? (
+              <div className="space-y-4">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-32 rounded-2xl" />)}
+              </div>
+            ) : filteredSent?.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl border">
+                <Send className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="font-bold text-lg mb-2">No Applications Sent</h3>
+                <p className="text-gray-500 mb-4">Start by sending an application to an athlete</p>
+                <Button onClick={() => setShowNewApplication(true)} className="bg-orange-500">
+                  Send Your First Application
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredSent?.map(app => (
+                  <Card key={app.id} className="hover:shadow-lg transition">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 bg-orange-500 rounded-xl flex items-center justify-center">
+                            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-lg">{getAthleteName(app.athlete_id)}</h3>
+                            <p className="text-gray-500 text-sm capitalize">{app.sponsorship_type?.replace('_', ' ')} · {app.duration?.replace('_', ' ')}</p>
+                            <p className="text-gray-400 text-xs">{format(new Date(app.created_date), 'MMM d, yyyy')}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {app.amount && <span className="font-bold text-green-600">${app.amount}</span>}
+                          {getStatusBadge(app.status)}
+                          <Button size="sm" variant="outline" onClick={() => setSelectedApplication(app)}>
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="received">
+            {loadingApps ? (
+              <div className="space-y-4">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-32 rounded-2xl" />)}
+              </div>
+            ) : filteredReceived?.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl border">
+                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="font-bold text-lg mb-2">No Applications Received</h3>
+                <p className="text-gray-500">Applications from sponsors will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredReceived?.map(app => (
+                  <Card key={app.id} className={`hover:shadow-lg transition ${app.status === 'pending' ? 'border-orange-200 bg-orange-50/50' : ''}`}>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-bold text-lg">{app.sponsor_email}</h3>
+                            {app.status === 'pending' && <Badge className="bg-orange-500">New</Badge>}
+                          </div>
+                          <p className="text-gray-500 text-sm capitalize">{app.sponsorship_type?.replace('_', ' ')} · {app.duration?.replace('_', ' ')}</p>
+                          {app.amount && <p className="text-green-600 font-bold">${app.amount}</p>}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {getStatusBadge(app.status)}
+                          <Button size="sm" variant="outline" onClick={() => setSelectedApplication(app)}>
+                            {app.status === 'pending' ? 'Review' : 'View'}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* New Application Dialog */}
+      <Dialog open={showNewApplication} onOpenChange={setShowNewApplication}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Send Sponsorship Application</DialogTitle>
+            <DialogDescription>
+              Fill out the details to send a sponsorship offer to an athlete
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmitApplication} className="space-y-4">
+            <div>
+              <Label>Select Athlete</Label>
+              <Select value={newApp.athlete_id} onValueChange={(v) => setNewApp({...newApp, athlete_id: v})}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Choose an athlete" />
+                </SelectTrigger>
+                <SelectContent>
+                  {athletes.map(a => (
+                    <SelectItem key={a.id} value={a.id}>{a.name} - {a.sport}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Sponsorship Type</Label>
+              <Select value={newApp.sponsorship_type} onValueChange={(v) => setNewApp({...newApp, sponsorship_type: v})}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="equipment">Equipment</SelectItem>
+                  <SelectItem value="training">Training Support</SelectItem>
+                  <SelectItem value="financial">Financial Aid</SelectItem>
+                  <SelectItem value="mentorship">Mentorship</SelectItem>
+                  <SelectItem value="full_sponsorship">Full Sponsorship</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Amount (if applicable)</Label>
+                <Input 
+                  type="number" 
+                  placeholder="$0.00"
+                  value={newApp.amount}
+                  onChange={(e) => setNewApp({...newApp, amount: e.target.value})}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Duration</Label>
+                <Select value={newApp.duration} onValueChange={(v) => setNewApp({...newApp, duration: v})}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="one_time">One Time</SelectItem>
+                    <SelectItem value="3_months">3 Months</SelectItem>
+                    <SelectItem value="6_months">6 Months</SelectItem>
+                    <SelectItem value="1_year">1 Year</SelectItem>
+                    <SelectItem value="ongoing">Ongoing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label>Personal Message</Label>
+              <Textarea 
+                placeholder="Tell the athlete why you want to sponsor them..."
+                value={newApp.message}
+                onChange={(e) => setNewApp({...newApp, message: e.target.value})}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label>Custom Terms (Optional)</Label>
+              <Textarea 
+                placeholder="Any specific terms or conditions..."
+                value={newApp.custom_terms}
+                onChange={(e) => setNewApp({...newApp, custom_terms: e.target.value})}
+                className="mt-1"
+              />
+            </div>
+
+            <Button 
+              type="submit" 
+              className="w-full bg-orange-500 hover:bg-orange-600"
+              disabled={createApplicationMutation.isPending}
+            >
+              {createApplicationMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending...</>
+              ) : (
+                <><Send className="w-4 h-4 mr-2" /> Send Application</>
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Application Dialog */}
+      <Dialog open={!!selectedApplication} onOpenChange={() => setSelectedApplication(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Application Details</DialogTitle>
+          </DialogHeader>
+          
+          {selectedApplication && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">
+                    {applications.myAthleteId === selectedApplication.athlete_id ? 'From' : 'To'}
+                  </p>
+                  <p className="font-bold">
+                    {applications.myAthleteId === selectedApplication.athlete_id 
+                      ? selectedApplication.sponsor_email 
+                      : getAthleteName(selectedApplication.athlete_id)}
+                  </p>
+                </div>
+                {getStatusBadge(selectedApplication.status)}
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Type</span>
+                  <span className="font-semibold capitalize">{selectedApplication.sponsorship_type?.replace('_', ' ')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Duration</span>
+                  <span className="font-semibold capitalize">{selectedApplication.duration?.replace('_', ' ')}</span>
+                </div>
+                {selectedApplication.amount && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Amount</span>
+                    <span className="font-bold text-green-600">${selectedApplication.amount}</span>
+                  </div>
+                )}
+              </div>
+
+              {selectedApplication.message && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Message</p>
+                  <p className="bg-white border rounded-lg p-3">{selectedApplication.message}</p>
+                </div>
+              )}
+
+              {selectedApplication.custom_terms && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Custom Terms</p>
+                  <p className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm">{selectedApplication.custom_terms}</p>
+                </div>
+              )}
+
+              {selectedApplication.response_message && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Response</p>
+                  <p className="bg-blue-50 border border-blue-200 rounded-lg p-3">{selectedApplication.response_message}</p>
+                </div>
+              )}
+
+              {/* Response actions for athlete */}
+              {applications.myAthleteId === selectedApplication.athlete_id && selectedApplication.status === 'pending' && (
+                <div className="pt-4 border-t space-y-3">
+                  <Textarea 
+                    placeholder="Add a response message (optional)..."
+                    value={responseMessage}
+                    onChange={(e) => setResponseMessage(e.target.value)}
+                  />
+                  <div className="flex gap-3">
+                    <Button 
+                      onClick={() => handleRespond('accepted')}
+                      className="flex-1 bg-green-500 hover:bg-green-600"
+                      disabled={updateApplicationMutation.isPending}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Accept
+                    </Button>
+                    <Button 
+                      onClick={() => handleRespond('declined')}
+                      variant="outline"
+                      className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                      disabled={updateApplicationMutation.isPending}
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
