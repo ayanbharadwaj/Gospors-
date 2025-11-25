@@ -1,0 +1,68 @@
+{
+  "name": "SponsorshipApplication",
+  "type": "object",
+  "properties": {
+    "sponsor_email": {
+      "type": "string"
+    },
+    "athlete_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined",
+        "withdrawn"
+      ],
+      "default": "pending"
+    },
+    "sponsorship_type": {
+      "type": "string",
+      "enum": [
+        "equipment",
+        "training",
+        "financial",
+        "mentorship",
+        "full_sponsorship"
+      ],
+      "description": "Type of sponsorship offered"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Financial amount if applicable"
+    },
+    "duration": {
+      "type": "string",
+      "enum": [
+        "one_time",
+        "3_months",
+        "6_months",
+        "1_year",
+        "ongoing"
+      ]
+    },
+    "custom_terms": {
+      "type": "string",
+      "description": "Custom terms and conditions"
+    },
+    "message": {
+      "type": "string",
+      "description": "Personal message to athlete"
+    },
+    "response_message": {
+      "type": "string",
+      "description": "Athlete's response message"
+    },
+    "responded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "sponsor_email",
+    "athlete_id",
+    "sponsorship_type"
+  ]
+}
