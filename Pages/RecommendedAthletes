@@ -1,0 +1,578 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { 
+  Sparkles, Filter, MapPin, Users, Flame, Search,
+  Loader2, SlidersHorizontal, X, Bookmark, Eye, Heart,
+  EyeOff, ThumbsDown, RefreshCw, ClipboardList
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from 'sonner';
+import SponsorMatchQuiz from '@/components/sponsors/SponsorMatchQuiz';
+
+export default function RecommendedAthletes() {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [bookmarked, setBookmarked] = useState(new Set());
+  const [hiddenAthletes, setHiddenAthletes] = useState(new Set());
+  const [showQuiz, setShowQuiz] = useState(false);
+  
+  const [filters, setFilters] = useState({
+    sport: 'all',
+    ageMin: 5,
+    ageMax: 25,
+    location: '',
+    showTrendingOnly: false
+  });
+
+  const queryClient = useQueryClient();
+  const sports = ['Basketball', 'Soccer', 'Track & Field', 'Tennis', 'Football', 'Swimming', 'Baseball', 'Volleyball', 'Other'];
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const isAuth = await base44.auth.isAuthenticated();
+        if (!isAuth) {
+          base44.auth.redirectToLogin(window.location.href);
+          return;
+        }
+        const userData = await base44.auth.me();
+        setUser(userData);
+      } catch (e) {
+        base44.auth.redirectToLogin(window.location.href);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const { data: athletes = [], isLoading: loadingAthletes } = useQuery({
+    queryKey: ['athletes'],
+    queryFn: () => base44.entities.Athlete.list('-created_date'),
+  });
+
+  const { data: sponsorPrefs } = useQuery({
+    queryKey: ['sponsorPreferences', user?.email],
+    queryFn: async () => {
+      const prefs = await base44.entities.SponsorPreferences.filter({ sponsor_email: user.email });
+      return prefs[0];
+    },
+    enabled: !!user?.email,
+  });
+
+  const { data: favorites = [] } = useQuery({
+    queryKey: ['favorites', user?.email],
+    queryFn: () => base44.entities.SponsorFavorite.filter({ sponsor_email: user.email }),
+    enabled: !!user?.email,
+  });
+
+  const { data: hidden = [] } = useQuery({
+    queryKey: ['hiddenAthletes', user?.email],
+    queryFn: () => base44.entities.HiddenAthlete.filter({ sponsor_email: user.email }),
+    enabled: !!user?.email,
+  });
+
+  const { data: applications = [] } = useQuery({
+    queryKey: ['myApplications', user?.email],
+    queryFn: () => base44.entities.SponsorshipApplication.filter({ sponsor_email: user.email }),
+    enabled: !!user?.email,
+  });
+
+  useEffect(() => {
+    if (favorites.length > 0) setBookmarked(new Set(favorites.map(f => f.athlete_id)));
+    if (hidden.length > 0) setHiddenAthletes(new Set(hidden.map(h => h.athlete_id)));
+  }, [favorites, hidden]);
+
+  // Show quiz if preferences not completed
+  useEffect(() => {
+    if (user && sponsorPrefs === undefined) return; // Still loading
+    if (user && !sponsorPrefs?.quiz_completed && athletes.length > 0) {
+      setShowQuiz(true);
+    }
+  }, [user, sponsorPrefs, athletes]);
+
+  // Generate AI recommendations using actual AI
+  const generateRecommendations = async () => {
+    if (!sponsorPrefs?.quiz_completed) {
+      setShowQuiz(true);
+      return;
+    }
+    
+    setLoadingRecs(true);
+    try {
+      const visibleAthletes = athletes.filter(a => !hiddenAthletes.has(a.id));
+      
+      // Calculate profile completeness score for each athlete
+      const athleteData = visibleAthletes.slice(0, 30).map(a => {
+        const completeness = [
+          a.name ? 20 : 0,
+          a.story?.length > 100 ? 20 : (a.story?.length > 50 ? 10 : 0),
+          a.profile_image_url ? 15 : 0,
+          a.highlight_url ? 15 : 0,
+          a.needs?.length > 0 ? 15 : 0,
+          a.stats && Object.keys(a.stats).length > 0 ? 15 : 0
+        ].reduce((a, b) => a + b, 0);
+        
+        return {
+          id: a.id,
+          name: a.name,
+          sport: a.sport,
+          age: a.age,
+          location: a.location,
+          needs: a.needs,
+          story: a.story?.substring(0, 150),
+          is_trending: a.is_trending,
+          profile_completeness: completeness,
+          has_bookmarked: bookmarked.has(a.id),
+          has_applied: applications.some(app => app.athlete_id === a.id)
+        };
+      });
+
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: `You are an AI matching system for a sports sponsorship platform. Analyze the sponsor's preferences and match them with the most suitable athletes.
+
+SPONSOR PREFERENCES (from their quiz):
+- Preferred Sports: ${sponsorPrefs.preferred_sports?.join(', ') || 'Any'}
+- Age Range: ${sponsorPrefs.preferred_age_min || 5} - ${sponsorPrefs.preferred_age_max || 25}
+- Preferred Locations: ${sponsorPrefs.preferred_locations?.join(', ') || 'Any'}
+- Budget Range: ${sponsorPrefs.budget_range || 'Not specified'}
+- Support Types: ${sponsorPrefs.support_types?.join(', ') || 'Any'}
+- Values Important: ${sponsorPrefs.values_important?.join(', ') || 'Not specified'}
+- Sponsorship Goals: ${sponsorPrefs.sponsorship_goals?.join(', ') || 'Not specified'}
+- Commitment Level: ${sponsorPrefs.commitment_level || 'Not specified'}
+
+AVAILABLE ATHLETES:
+${JSON.stringify(athleteData, null, 2)}
+
+SCORING CRITERIA:
+1. Sport match (0-25 points): Exact match = 25, related sport = 15, any = 10
+2. Location match (0-20 points): Same city = 20, same state = 15, any = 10
+3. Age within range (0-15 points): In range = 15, close = 10, out = 5
+4. Profile completeness (0-15 points): Based on profile_completeness score
+5. Needs alignment with support types (0-15 points)
+6. Story compelling and values aligned (0-10 points)
+
+IMPORTANT:
+- Prioritize athletes NOT already bookmarked or applied to
+- Consider trending athletes for bonus points
+- Give detailed, personalized reasons
+
+Return the top 6 matches with scores and specific reasons why they match.`,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            recommendations: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  athlete_id: { type: "string" },
+                  match_score: { type: "number" },
+                  reason: { type: "string" },
+                  key_factors: { type: "array", items: { type: "string" } }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const recs = result.recommendations?.map(r => ({
+        ...r,
+        athlete: athletes.find(a => a.id === r.athlete_id)
+      })).filter(r => r.athlete) || [];
+
+      setRecommendations(recs);
+    } catch (error) {
+      console.error('AI recommendations failed:', error);
+      toast.error('Failed to generate recommendations. Please try again.');
+    } finally {
+      setLoadingRecs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (athletes.length > 0 && sponsorPrefs?.quiz_completed && !loadingAthletes) {
+      generateRecommendations();
+    }
+  }, [athletes, sponsorPrefs, hiddenAthletes]);
+
+  const addFavoriteMutation = useMutation({
+    mutationFn: (athleteId) => base44.entities.SponsorFavorite.create({
+      sponsor_email: user.email,
+      athlete_id: athleteId
+    }),
+    onSuccess: () => queryClient.invalidateQueries(['favorites']),
+  });
+
+  const removeFavoriteMutation = useMutation({
+    mutationFn: async (athleteId) => {
+      const fav = favorites.find(f => f.athlete_id === athleteId);
+      if (fav) await base44.entities.SponsorFavorite.delete(fav.id);
+    },
+    onSuccess: () => queryClient.invalidateQueries(['favorites']),
+  });
+
+  const hideAthleteMutation = useMutation({
+    mutationFn: ({ athleteId, reason }) => base44.entities.HiddenAthlete.create({
+      sponsor_email: user.email,
+      athlete_id: athleteId,
+      reason
+    }),
+    onSuccess: (_, { athleteId }) => {
+      queryClient.invalidateQueries(['hiddenAthletes']);
+      setHiddenAthletes(prev => new Set(prev).add(athleteId));
+      toast.success('Athlete hidden from recommendations');
+    },
+  });
+
+  const toggleBookmark = (athleteId) => {
+    if (bookmarked.has(athleteId)) {
+      removeFavoriteMutation.mutate(athleteId);
+      setBookmarked(prev => { const n = new Set(prev); n.delete(athleteId); return n; });
+    } else {
+      addFavoriteMutation.mutate(athleteId);
+      setBookmarked(prev => new Set(prev).add(athleteId));
+    }
+  };
+
+  const hideAthlete = (athleteId, reason = 'not_interested') => {
+    hideAthleteMutation.mutate({ athleteId, reason });
+  };
+
+  const visibleAthletes = athletes.filter(a => !hiddenAthletes.has(a.id));
+  const filteredAthletes = visibleAthletes.filter(a => {
+    if (filters.sport !== 'all' && a.sport !== filters.sport) return false;
+    if (a.age && (a.age < filters.ageMin || a.age > filters.ageMax)) return false;
+    if (filters.location && !a.location?.toLowerCase().includes(filters.location.toLowerCase())) return false;
+    if (filters.showTrendingOnly && !a.is_trending) return false;
+    return true;
+  });
+
+  const AthleteCard = ({ athlete, matchScore, reason, keyFactors }) => (
+    <Card className="overflow-hidden hover:shadow-lg transition group relative">
+      <CardContent className="p-0">
+        <div className="p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 bg-orange-500 rounded-xl flex items-center justify-center">
+                {athlete.profile_image_url ? (
+                  <img src={athlete.profile_image_url} className="w-full h-full rounded-xl object-cover" />
+                ) : (
+                  <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold">{athlete.name}</h3>
+                  {athlete.is_trending && <Flame className="w-4 h-4 text-orange-500" />}
+                </div>
+                <p className="text-gray-500 text-sm">{athlete.sport}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => toggleBookmark(athlete.id)} className="p-1 hover:bg-gray-100 rounded">
+                <Bookmark className={`w-5 h-5 ${bookmarked.has(athlete.id) ? 'fill-orange-500 text-orange-500' : 'text-gray-400'}`} />
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-1 hover:bg-gray-100 rounded">
+                    <EyeOff className="w-5 h-5 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => hideAthlete(athlete.id, 'not_interested')}>
+                    <ThumbsDown className="w-4 h-4 mr-2" />
+                    Not Interested
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => hideAthlete(athlete.id, 'wrong_sport')}>
+                    Wrong Sport
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => hideAthlete(athlete.id, 'location')}>
+                    Wrong Location
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {matchScore && (
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg p-3 mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-semibold text-orange-700 flex items-center gap-1">
+                  <Sparkles className="w-4 h-4" />
+                  AI Match Score
+                </span>
+                <span className="font-bold text-orange-600">{matchScore}%</span>
+              </div>
+              {reason && <p className="text-xs text-orange-600 mb-2">{reason}</p>}
+              {keyFactors && keyFactors.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {keyFactors.slice(0, 3).map((f, i) => (
+                    <span key={i} className="text-xs bg-orange-200 text-orange-700 px-2 py-0.5 rounded-full">{f}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+            {athlete.location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {athlete.location}
+              </span>
+            )}
+            {athlete.age && <span>· {athlete.age} yrs</span>}
+          </div>
+
+          <p className="text-gray-600 text-sm line-clamp-2 mb-3">{athlete.story}</p>
+
+          <div className="flex gap-2">
+            <Link to={`${createPageUrl('AthleteProfile')}?id=${athlete.id}`} className="flex-1">
+              <Button variant="outline" size="sm" className="w-full">
+                <Eye className="w-4 h-4 mr-1" />
+                View
+              </Button>
+            </Link>
+            <Link to={`${createPageUrl('SponsorshipApplications')}?athleteId=${athlete.id}`} className="flex-1">
+              <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600">
+                <Heart className="w-4 h-4 mr-1" />
+                Sponsor
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-12">
+        <div className="max-w-6xl mx-auto px-6">
+          <h1 className="text-3xl md:text-4xl font-black mb-2 flex items-center gap-3">
+            <Sparkles className="w-8 h-8" />
+            AI-Powered Recommendations
+          </h1>
+          <p className="text-orange-100">Personalized athlete matches based on your preferences</p>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto py-8 px-6">
+        {/* Quiz Prompt */}
+        {!sponsorPrefs?.quiz_completed && (
+          <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-6 mb-8 flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-lg mb-1">Complete Your Matching Profile</h3>
+              <p className="text-gray-600">Take a quick quiz to get personalized athlete recommendations</p>
+            </div>
+            <Button onClick={() => setShowQuiz(true)} className="bg-orange-500 hover:bg-orange-600">
+              <ClipboardList className="w-4 h-4 mr-2" />
+              Start Quiz
+            </Button>
+          </div>
+        )}
+
+        {/* AI Recommendations */}
+        {sponsorPrefs?.quiz_completed && (
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-orange-500" />
+                Your AI Matches
+              </h2>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowQuiz(true)}>
+                  <ClipboardList className="w-4 h-4 mr-1" />
+                  Retake Quiz
+                </Button>
+                <Button variant="outline" size="sm" onClick={generateRecommendations} disabled={loadingRecs}>
+                  {loadingRecs ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+            
+            {loadingRecs ? (
+              <div className="grid md:grid-cols-3 gap-4">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-72 rounded-xl" />)}
+              </div>
+            ) : recommendations.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-2xl">
+                <Sparkles className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="font-bold text-lg">No matches yet</h3>
+                <p className="text-gray-500">Complete the quiz to get personalized recommendations</p>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-4">
+                {recommendations.map((rec, idx) => (
+                  <AthleteCard 
+                    key={rec.athlete?.id || idx}
+                    athlete={rec.athlete}
+                    matchScore={rec.match_score}
+                    reason={rec.reason}
+                    keyFactors={rec.key_factors}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Filter Section */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold">Browse All Athletes</h2>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <SlidersHorizontal className="w-4 h-4 mr-2" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Filter Athletes</SheetTitle>
+              </SheetHeader>
+              <div className="mt-6 space-y-6">
+                <div>
+                  <Label>Sport</Label>
+                  <Select value={filters.sport} onValueChange={(v) => setFilters({...filters, sport: v})}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sports</SelectItem>
+                      {sports.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Age Range: {filters.ageMin} - {filters.ageMax}</Label>
+                  <div className="mt-3 px-2">
+                    <Slider
+                      value={[filters.ageMin, filters.ageMax]}
+                      onValueChange={([min, max]) => setFilters({...filters, ageMin: min, ageMax: max})}
+                      min={5}
+                      max={25}
+                      step={1}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Location</Label>
+                  <Input 
+                    placeholder="City or state..."
+                    value={filters.location}
+                    onChange={(e) => setFilters({...filters, location: e.target.value})}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    checked={filters.showTrendingOnly}
+                    onCheckedChange={(c) => setFilters({...filters, showTrendingOnly: c})}
+                  />
+                  <Label>Show Trending Only</Label>
+                </div>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => setFilters({ sport: 'all', ageMin: 5, ageMax: 25, location: '', showTrendingOnly: false })}
+                >
+                  Reset Filters
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        {/* Active Filters */}
+        {(filters.sport !== 'all' || filters.location || filters.showTrendingOnly) && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {filters.sport !== 'all' && (
+              <Badge variant="secondary" className="cursor-pointer" onClick={() => setFilters({...filters, sport: 'all'})}>
+                {filters.sport} <X className="w-3 h-3 ml-1" />
+              </Badge>
+            )}
+            {filters.location && (
+              <Badge variant="secondary" className="cursor-pointer" onClick={() => setFilters({...filters, location: ''})}>
+                {filters.location} <X className="w-3 h-3 ml-1" />
+              </Badge>
+            )}
+            {filters.showTrendingOnly && (
+              <Badge variant="secondary" className="cursor-pointer" onClick={() => setFilters({...filters, showTrendingOnly: false})}>
+                Trending Only <X className="w-3 h-3 ml-1" />
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* All Athletes Grid */}
+        {loadingAthletes ? (
+          <div className="grid md:grid-cols-3 gap-4">
+            {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-64 rounded-xl" />)}
+          </div>
+        ) : filteredAthletes.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-2xl">
+            <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="font-bold text-lg">No athletes match your filters</h3>
+            <p className="text-gray-500">Try adjusting your criteria</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-4">
+            {filteredAthletes.map(athlete => (
+              <AthleteCard key={athlete.id} athlete={athlete} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Match Quiz Dialog */}
+      <SponsorMatchQuiz 
+        open={showQuiz}
+        onOpenChange={setShowQuiz}
+        userEmail={user?.email}
+        onComplete={generateRecommendations}
+      />
+    </div>
+  );
+}
