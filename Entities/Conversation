@@ -1,0 +1,25 @@
+{
+  "name": "Conversation",
+  "type": "object",
+  "properties": {
+    "participant_emails": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "athlete_id": {
+      "type": "string"
+    },
+    "last_message": {
+      "type": "string"
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "participant_emails"
+  ]
+}
