@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { base44 } from '@/api/base44Client';
-import { Trophy, Menu, X, User, LogOut, ChevronDown } from 'lucide-react';
+import { Trophy, Menu, X, User, LogOut, ChevronDown, MessageSquare, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -31,6 +32,22 @@ export default function Layout({ children, currentPageName }) {
     loadUser();
   }, []);
 
+  // Check for unread messages
+  useEffect(() => {
+    if (!user?.email) return;
+    
+    const checkUnread = async () => {
+      try {
+        const msgs = await base44.entities.Message.filter({ receiver_email: user.email, read: false });
+        setUnreadCount(msgs.length);
+      } catch (e) {}
+    };
+    
+    checkUnread();
+    const interval = setInterval(checkUnread, 5000);
+    return () => clearInterval(interval);
+  }, [user?.email]);
+
   const handleLogout = () => {
     base44.auth.logout(createPageUrl('Home'));
   };
@@ -38,6 +55,7 @@ export default function Layout({ children, currentPageName }) {
   const navLinks = [
     { name: 'Home', page: 'Home' },
     { name: 'Discover', page: 'Discover' },
+    { name: 'Messages', page: 'Messages' },
   ];
 
   return (
@@ -65,13 +83,23 @@ export default function Layout({ children, currentPageName }) {
                 <Link 
                   key={link.page}
                   to={createPageUrl(link.page)}
-                  className={`px-5 py-2 rounded-full font-semibold transition ${
+                  className={`px-5 py-2 rounded-full font-semibold transition relative ${
                     currentPageName === link.page 
                       ? 'bg-orange-100 text-orange-700' 
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  {link.name}
+                  {link.name === 'Messages' ? (
+                    <span className="flex items-center gap-1">
+                      <MessageSquare className="w-4 h-4" />
+                      Messages
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </span>
+                  ) : link.name}
                 </Link>
               ))}
               
@@ -94,7 +122,31 @@ export default function Layout({ children, currentPageName }) {
                     <DropdownMenuItem asChild>
                       <Link to={createPageUrl('AthleteDashboard')} className="cursor-pointer">
                         <User className="w-4 h-4 mr-2" />
-                        My Dashboard
+                        Athlete Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to={createPageUrl('SponsorDashboard')} className="cursor-pointer">
+                        <User className="w-4 h-4 mr-2" />
+                        Sponsor Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to={createPageUrl('Messages')} className="cursor-pointer">
+                        <User className="w-4 h-4 mr-2" />
+                        Messages
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to={createPageUrl('SponsorshipApplications')} className="cursor-pointer">
+                        <User className="w-4 h-4 mr-2" />
+                        Applications
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to={createPageUrl('RecommendedAthletes')} className="cursor-pointer">
+                        <User className="w-4 h-4 mr-2" />
+                        Recommendations
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -144,13 +196,21 @@ export default function Layout({ children, currentPageName }) {
                     key={link.page}
                     to={createPageUrl(link.page)}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`px-4 py-3 rounded-xl font-semibold transition ${
+                    className={`px-4 py-3 rounded-xl font-semibold transition flex items-center justify-between ${
                       currentPageName === link.page 
                         ? 'bg-orange-100 text-orange-700' 
                         : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    {link.name}
+                    <span className="flex items-center gap-2">
+                      {link.name === 'Messages' && <MessageSquare className="w-4 h-4" />}
+                      {link.name}
+                    </span>
+                    {link.name === 'Messages' && unreadCount > 0 && (
+                      <span className="w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
                   </Link>
                 ))}
                 
@@ -161,7 +221,21 @@ export default function Layout({ children, currentPageName }) {
                       onClick={() => setMobileMenuOpen(false)}
                       className="px-4 py-3 rounded-xl font-semibold text-gray-700 hover:bg-gray-100"
                     >
-                      My Dashboard
+                      Athlete Dashboard
+                    </Link>
+                    <Link 
+                      to={createPageUrl('SponsorDashboard')}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="px-4 py-3 rounded-xl font-semibold text-gray-700 hover:bg-gray-100"
+                    >
+                      Sponsor Dashboard
+                    </Link>
+                    <Link 
+                      to={createPageUrl('Messages')}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="px-4 py-3 rounded-xl font-semibold text-gray-700 hover:bg-gray-100"
+                    >
+                      Messages
                     </Link>
                     <button 
                       onClick={handleLogout}
@@ -221,10 +295,10 @@ export default function Layout({ children, currentPageName }) {
               </ul>
             </div>
             <div>
-              <h4 className="font-bold mb-4">Support</h4>
+              <h4 className="font-bold mb-4">Legal</h4>
               <ul className="space-y-2 text-slate-400">
-                <li><a href="#" className="hover:text-white transition">How It Works</a></li>
-                <li><a href="#" className="hover:text-white transition">Contact Us</a></li>
+                <li><Link to={createPageUrl('TermsOfService')} className="hover:text-white transition">Terms of Service</Link></li>
+                <li><Link to={createPageUrl('PrivacyPolicy')} className="hover:text-white transition">Privacy Policy</Link></li>
               </ul>
             </div>
           </div>
