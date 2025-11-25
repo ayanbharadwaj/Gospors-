@@ -1,0 +1,70 @@
+{
+  "name": "SponsorPreferences",
+  "type": "object",
+  "properties": {
+    "sponsor_email": {
+      "type": "string"
+    },
+    "preferred_sports": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "preferred_age_min": {
+      "type": "number"
+    },
+    "preferred_age_max": {
+      "type": "number"
+    },
+    "preferred_locations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "budget_range": {
+      "type": "string",
+      "enum": [
+        "under_500",
+        "500_1000",
+        "1000_5000",
+        "5000_plus"
+      ]
+    },
+    "sponsorship_goals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "support_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "values_important": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "commitment_level": {
+      "type": "string",
+      "enum": [
+        "one_time",
+        "short_term",
+        "long_term",
+        "ongoing"
+      ]
+    },
+    "quiz_completed": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "sponsor_email"
+  ]
+}
