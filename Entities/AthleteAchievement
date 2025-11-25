@@ -1,0 +1,46 @@
+{
+  "name": "AthleteAchievement",
+  "type": "object",
+  "properties": {
+    "athlete_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "award",
+        "certificate",
+        "milestone",
+        "sponsorship",
+        "competition"
+      ]
+    },
+    "certificate_url": {
+      "type": "string",
+      "description": "URL to uploaded certificate/award image"
+    },
+    "sponsor_name": {
+      "type": "string",
+      "description": "If type is sponsorship, the sponsor name"
+    },
+    "impact_description": {
+      "type": "string",
+      "description": "How this achievement/sponsorship helped"
+    }
+  },
+  "required": [
+    "athlete_id",
+    "title",
+    "type"
+  ]
+}
