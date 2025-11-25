@@ -19,8 +19,31 @@
     "profile_image_url": {
       "type": "string"
     },
+    "logo_url": {
+      "type": "string",
+      "description": "Company logo"
+    },
     "website": {
       "type": "string"
+    },
+    "company_size": {
+      "type": "string",
+      "enum": [
+        "individual",
+        "small",
+        "medium",
+        "large",
+        "enterprise"
+      ]
+    },
+    "industry": {
+      "type": "string"
+    },
+    "areas_of_focus": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "sports_interested": {
       "type": "array",
@@ -28,6 +51,27 @@
         "type": "string"
       },
       "description": "Sports they're interested in supporting"
+    },
+    "preferred_locations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "budget_range": {
+      "type": "string",
+      "enum": [
+        "under_500",
+        "500_1000",
+        "1000_5000",
+        "5000_plus"
+      ]
+    },
+    "sponsorship_goals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "total_athletes_supported": {
       "type": "number",
