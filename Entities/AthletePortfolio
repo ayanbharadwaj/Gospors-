@@ -1,0 +1,41 @@
+{
+  "name": "AthletePortfolio",
+  "type": "object",
+  "properties": {
+    "athlete_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "video",
+        "image",
+        "document"
+      ]
+    },
+    "media_url": {
+      "type": "string"
+    },
+    "performance_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "event_name": {
+      "type": "string"
+    },
+    "results": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "athlete_id",
+    "title",
+    "media_type"
+  ]
+}
