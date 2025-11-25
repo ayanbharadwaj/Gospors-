@@ -1,0 +1,413 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { 
+  Building, Upload, Loader2, Save, Globe, MapPin,
+  Users, Briefcase, Target, Heart, Edit, X, Plus, Eye
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+
+const industries = [
+  'Sports & Fitness', 'Technology', 'Healthcare', 'Finance', 'Retail',
+  'Food & Beverage', 'Entertainment', 'Education', 'Manufacturing', 'Non-Profit', 'Other'
+];
+
+const companySizes = [
+  { value: 'individual', label: 'Individual/Personal' },
+  { value: 'small', label: 'Small (1-10 employees)' },
+  { value: 'medium', label: 'Medium (11-100 employees)' },
+  { value: 'large', label: 'Large (101-1000 employees)' },
+  { value: 'enterprise', label: 'Enterprise (1000+ employees)' }
+];
+
+const focusAreas = [
+  'Youth Development', 'Elite Athletes', 'Underprivileged Communities',
+  'Women in Sports', 'Paralympic Athletes', 'Local Talent', 'National Talent'
+];
+
+export default function SponsorProfile() {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    username: '',
+    bio: '',
+    location: '',
+    website: '',
+    logo_url: '',
+    company_size: '',
+    industry: '',
+    areas_of_focus: [],
+    sports_interested: []
+  });
+
+  const queryClient = useQueryClient();
+  const sports = ['Basketball', 'Soccer', 'Track & Field', 'Tennis', 'Football', 'Swimming', 'Baseball', 'Volleyball', 'Other'];
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const isAuth = await base44.auth.isAuthenticated();
+        if (!isAuth) {
+          base44.auth.redirectToLogin(window.location.href);
+          return;
+        }
+        const userData = await base44.auth.me();
+        setUser(userData);
+      } catch (e) {
+        base44.auth.redirectToLogin(window.location.href);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const { data: sponsorProfile, isLoading: loadingProfile } = useQuery({
+    queryKey: ['mySponsorProfile', user?.email],
+    queryFn: async () => {
+      const profiles = await base44.entities.Sponsor.filter({ created_by: user.email });
+      return profiles[0];
+    },
+    enabled: !!user?.email,
+  });
+
+  const { data: supportedAthletes = [] } = useQuery({
+    queryKey: ['supportedAthletes', user?.email],
+    queryFn: async () => {
+      const applications = await base44.entities.SponsorshipApplication.filter({ 
+        sponsor_email: user.email, 
+        status: 'accepted' 
+      });
+      if (applications.length === 0) return [];
+      const athletes = await base44.entities.Athlete.list();
+      return athletes.filter(a => applications.some(app => app.athlete_id === a.id));
+    },
+    enabled: !!user?.email,
+  });
+
+  useEffect(() => {
+    if (sponsorProfile) {
+      setFormData({
+        name: sponsorProfile.name || '',
+        username: sponsorProfile.username || '',
+        bio: sponsorProfile.bio || '',
+        location: sponsorProfile.location || '',
+        website: sponsorProfile.website || '',
+        logo_url: sponsorProfile.logo_url || '',
+        company_size: sponsorProfile.company_size || '',
+        industry: sponsorProfile.industry || '',
+        areas_of_focus: sponsorProfile.areas_of_focus || [],
+        sports_interested: sponsorProfile.sports_interested || []
+      });
+    }
+  }, [sponsorProfile]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data) => {
+      if (sponsorProfile) {
+        return base44.entities.Sponsor.update(sponsorProfile.id, data);
+      }
+      return base44.entities.Sponsor.create(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['mySponsorProfile']);
+      setEditMode(false);
+      toast.success('Profile saved!');
+    },
+  });
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      setFormData(prev => ({ ...prev, logo_url: file_url }));
+      toast.success('Logo uploaded!');
+    } catch (error) {
+      toast.error('Upload failed');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const toggleArrayItem = (field, item) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: prev[field].includes(item)
+        ? prev[field].filter(i => i !== item)
+        : [...prev[field], item]
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.name) {
+      toast.error('Please enter a name');
+      return;
+    }
+    saveMutation.mutate(formData);
+  };
+
+  if (isLoading || loadingProfile) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-6">
+        <div className="max-w-4xl mx-auto">
+          <Skeleton className="h-48 rounded-2xl mb-6" />
+          <Skeleton className="h-96 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-12">
+        <div className="max-w-4xl mx-auto px-6">
+          <h1 className="text-3xl md:text-4xl font-black mb-2">Sponsor Profile</h1>
+          <p className="text-orange-100">Manage your company profile and sponsorship history</p>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto py-8 px-6">
+        {/* Profile Card */}
+        <Card className="shadow-xl border-0 mb-8">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-2xl">Company Information</CardTitle>
+            <Button
+              variant={editMode ? "outline" : "default"}
+              onClick={() => setEditMode(!editMode)}
+              className={editMode ? "" : "bg-orange-500 hover:bg-orange-600"}
+            >
+              {editMode ? <><X className="w-4 h-4 mr-2" />Cancel</> : <><Edit className="w-4 h-4 mr-2" />Edit</>}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {editMode ? (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Logo */}
+                <div>
+                  <Label className="font-bold">Company Logo</Label>
+                  <div className="flex items-center gap-6 mt-2">
+                    <div className="w-24 h-24 bg-gray-100 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300">
+                      {formData.logo_url ? (
+                        <img src={formData.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Building className="w-10 h-10 text-gray-400" />
+                      )}
+                    </div>
+                    <div>
+                      <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" id="logo-upload" />
+                      <label htmlFor="logo-upload" className="cursor-pointer inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-200 transition">
+                        {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        Upload Logo
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Basic Info */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <Label>Company/Name *</Label>
+                    <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>Username</Label>
+                    <Input value={formData.username} onChange={(e) => setFormData({...formData, username: e.target.value})} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>Location</Label>
+                    <Input value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} className="mt-1" placeholder="City, State" />
+                  </div>
+                  <div>
+                    <Label>Website</Label>
+                    <Input value={formData.website} onChange={(e) => setFormData({...formData, website: e.target.value})} className="mt-1" placeholder="https://..." />
+                  </div>
+                  <div>
+                    <Label>Company Size</Label>
+                    <Select value={formData.company_size} onValueChange={(v) => setFormData({...formData, company_size: v})}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select size" /></SelectTrigger>
+                      <SelectContent>
+                        {companySizes.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Industry</Label>
+                    <Select value={formData.industry} onValueChange={(v) => setFormData({...formData, industry: v})}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select industry" /></SelectTrigger>
+                      <SelectContent>
+                        {industries.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>About</Label>
+                  <Textarea value={formData.bio} onChange={(e) => setFormData({...formData, bio: e.target.value})} className="mt-1" placeholder="Tell athletes about your company..." />
+                </div>
+
+                <div>
+                  <Label className="font-bold mb-3 block">Sports Interested</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {sports.map(sport => (
+                      <Badge 
+                        key={sport}
+                        variant={formData.sports_interested.includes(sport) ? "default" : "outline"}
+                        className={`cursor-pointer ${formData.sports_interested.includes(sport) ? 'bg-orange-500' : ''}`}
+                        onClick={() => toggleArrayItem('sports_interested', sport)}
+                      >
+                        {sport}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="font-bold mb-3 block">Areas of Focus</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {focusAreas.map(area => (
+                      <Badge 
+                        key={area}
+                        variant={formData.areas_of_focus.includes(area) ? "default" : "outline"}
+                        className={`cursor-pointer ${formData.areas_of_focus.includes(area) ? 'bg-orange-500' : ''}`}
+                        onClick={() => toggleArrayItem('areas_of_focus', area)}
+                      >
+                        {area}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-2" />Save Profile</>}
+                </Button>
+              </form>
+            ) : sponsorProfile ? (
+              <div className="space-y-6">
+                <div className="flex items-center gap-6">
+                  <div className="w-24 h-24 bg-gray-100 rounded-2xl flex items-center justify-center overflow-hidden">
+                    {sponsorProfile.logo_url ? (
+                      <img src={sponsorProfile.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                    ) : (
+                      <Building className="w-10 h-10 text-gray-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold">{sponsorProfile.name}</h3>
+                    {sponsorProfile.username && <p className="text-gray-500">@{sponsorProfile.username}</p>}
+                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                      {sponsorProfile.location && <span className="flex items-center gap-1"><MapPin className="w-4 h-4" />{sponsorProfile.location}</span>}
+                      {sponsorProfile.industry && <span className="flex items-center gap-1"><Briefcase className="w-4 h-4" />{sponsorProfile.industry}</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {sponsorProfile.bio && <p className="text-gray-700">{sponsorProfile.bio}</p>}
+
+                {sponsorProfile.website && (
+                  <a href={sponsorProfile.website} target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline flex items-center gap-1">
+                    <Globe className="w-4 h-4" />{sponsorProfile.website}
+                  </a>
+                )}
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {sponsorProfile.company_size && (
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <p className="text-sm text-gray-500 mb-1">Company Size</p>
+                      <p className="font-semibold">{companySizes.find(s => s.value === sponsorProfile.company_size)?.label}</p>
+                    </div>
+                  )}
+                  {sponsorProfile.sports_interested?.length > 0 && (
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <p className="text-sm text-gray-500 mb-2">Sports Interested</p>
+                      <div className="flex flex-wrap gap-1">
+                        {sponsorProfile.sports_interested.map(s => <Badge key={s} variant="secondary">{s}</Badge>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {sponsorProfile.areas_of_focus?.length > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-500 mb-2">Areas of Focus</p>
+                    <div className="flex flex-wrap gap-2">
+                      {sponsorProfile.areas_of_focus.map(a => <Badge key={a} className="bg-orange-100 text-orange-700">{a}</Badge>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Building className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="font-bold text-lg mb-2">Create Your Sponsor Profile</h3>
+                <p className="text-gray-500 mb-4">Set up your company profile to connect with athletes</p>
+                <Button onClick={() => setEditMode(true)} className="bg-orange-500 hover:bg-orange-600">
+                  <Plus className="w-4 h-4 mr-2" />Create Profile
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Sponsorship History */}
+        <Card className="shadow-xl border-0">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Heart className="w-5 h-5 text-orange-500" />
+              Sponsorship History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {supportedAthletes.length === 0 ? (
+              <div className="text-center py-8 bg-gray-50 rounded-xl">
+                <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No athletes sponsored yet</p>
+                <Link to={createPageUrl('Discover')}>
+                  <Button variant="outline" className="mt-4">Find Athletes to Support</Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {supportedAthletes.map(athlete => (
+                  <div key={athlete.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div className="w-14 h-14 bg-orange-500 rounded-xl flex items-center justify-center">
+                      {athlete.profile_image_url ? (
+                        <img src={athlete.profile_image_url} className="w-full h-full rounded-xl object-cover" />
+                      ) : (
+                        <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 19h20v3H2v-3zm2-9l4 4 4-6 4 6 4-4v9H4v-9z"/></svg>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold">{athlete.name}</h4>
+                      <p className="text-gray-500 text-sm">{athlete.sport}</p>
+                    </div>
+                    <Link to={`${createPageUrl('AthleteProfile')}?id=${athlete.id}`}>
+                      <Button size="sm" variant="outline"><Eye className="w-4 h-4" /></Button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
