@@ -1,0 +1,363 @@
+import React, { useState } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  Sparkles, ChevronRight, ChevronLeft, Check, 
+  Trophy, MapPin, DollarSign, Heart, Target
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { toast } from 'sonner';
+import { Progress } from '@/components/ui/progress';
+
+const sports = ['Basketball', 'Soccer', 'Track & Field', 'Tennis', 'Football', 'Swimming', 'Baseball', 'Volleyball', 'Other'];
+const supportTypes = ['Equipment', 'Training Programs', 'Competition Fees', 'Travel Expenses', 'Nutrition', 'Mentorship', 'Full Sponsorship'];
+const values = ['Dedication', 'Community Impact', 'Academic Excellence', 'Overcoming Adversity', 'Leadership', 'Team Spirit', 'Innovation'];
+const goals = ['Build Brand Awareness', 'Support Local Community', 'Discover Future Stars', 'Make a Difference', 'Long-term Partnership', 'One-time Support'];
+
+export default function SponsorMatchQuiz({ open, onOpenChange, userEmail, onComplete }) {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState({
+    preferred_sports: [],
+    preferred_age_min: 10,
+    preferred_age_max: 20,
+    preferred_locations: [],
+    budget_range: '',
+    support_types: [],
+    values_important: [],
+    sponsorship_goals: [],
+    commitment_level: ''
+  });
+  const [locationInput, setLocationInput] = useState('');
+  
+  const queryClient = useQueryClient();
+
+  const saveMutation = useMutation({
+    mutationFn: async (data) => {
+      const existing = await base44.entities.SponsorPreferences.filter({ sponsor_email: userEmail });
+      if (existing.length > 0) {
+        return base44.entities.SponsorPreferences.update(existing[0].id, { ...data, quiz_completed: true });
+      }
+      return base44.entities.SponsorPreferences.create({ ...data, sponsor_email: userEmail, quiz_completed: true });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['sponsorPreferences']);
+      toast.success('Preferences saved! Getting your personalized recommendations...');
+      onComplete?.();
+      onOpenChange(false);
+    },
+  });
+
+  const questions = [
+    {
+      title: "What sports interest you?",
+      subtitle: "Select all that apply",
+      icon: <Trophy className="w-8 h-8" />,
+      content: (
+        <div className="grid grid-cols-2 gap-3">
+          {sports.map(sport => (
+            <label key={sport} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+              answers.preferred_sports.includes(sport) ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <Checkbox 
+                checked={answers.preferred_sports.includes(sport)}
+                onCheckedChange={(checked) => {
+                  setAnswers(prev => ({
+                    ...prev,
+                    preferred_sports: checked 
+                      ? [...prev.preferred_sports, sport]
+                      : prev.preferred_sports.filter(s => s !== sport)
+                  }));
+                }}
+              />
+              <span className="font-medium">{sport}</span>
+            </label>
+          ))}
+        </div>
+      )
+    },
+    {
+      title: "What age range are you looking to support?",
+      subtitle: "Most athletes on our platform are between 8-22 years old",
+      icon: <Target className="w-8 h-8" />,
+      content: (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Minimum Age</Label>
+              <Input 
+                type="number" 
+                min={5} 
+                max={25}
+                value={answers.preferred_age_min}
+                onChange={(e) => setAnswers({...answers, preferred_age_min: parseInt(e.target.value)})}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Maximum Age</Label>
+              <Input 
+                type="number" 
+                min={5} 
+                max={25}
+                value={answers.preferred_age_max}
+                onChange={(e) => setAnswers({...answers, preferred_age_max: parseInt(e.target.value)})}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Preferred locations?",
+      subtitle: "Add cities or states you'd like to focus on",
+      icon: <MapPin className="w-8 h-8" />,
+      content: (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Input 
+              placeholder="Enter city or state..."
+              value={locationInput}
+              onChange={(e) => setLocationInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && locationInput.trim()) {
+                  setAnswers(prev => ({
+                    ...prev,
+                    preferred_locations: [...prev.preferred_locations, locationInput.trim()]
+                  }));
+                  setLocationInput('');
+                }
+              }}
+            />
+            <Button 
+              type="button"
+              onClick={() => {
+                if (locationInput.trim()) {
+                  setAnswers(prev => ({
+                    ...prev,
+                    preferred_locations: [...prev.preferred_locations, locationInput.trim()]
+                  }));
+                  setLocationInput('');
+                }
+              }}
+            >
+              Add
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {answers.preferred_locations.map((loc, i) => (
+              <span key={i} className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                {loc}
+                <button onClick={() => setAnswers(prev => ({
+                  ...prev,
+                  preferred_locations: prev.preferred_locations.filter((_, idx) => idx !== i)
+                }))}>
+                  <span className="text-orange-500">×</span>
+                </button>
+              </span>
+            ))}
+          </div>
+          <p className="text-sm text-gray-500">Leave empty to see athletes from all locations</p>
+        </div>
+      )
+    },
+    {
+      title: "What's your budget range?",
+      subtitle: "This helps us match you with athletes who need your level of support",
+      icon: <DollarSign className="w-8 h-8" />,
+      content: (
+        <RadioGroup value={answers.budget_range} onValueChange={(v) => setAnswers({...answers, budget_range: v})}>
+          <div className="space-y-3">
+            {[
+              { value: 'under_500', label: 'Under $500', desc: 'Equipment, small fees' },
+              { value: '500_1000', label: '$500 - $1,000', desc: 'Training programs, competition fees' },
+              { value: '1000_5000', label: '$1,000 - $5,000', desc: 'Comprehensive support' },
+              { value: '5000_plus', label: '$5,000+', desc: 'Full sponsorship packages' }
+            ].map(opt => (
+              <label key={opt.value} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition ${
+                answers.budget_range === opt.value ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <RadioGroupItem value={opt.value} />
+                <div>
+                  <p className="font-semibold">{opt.label}</p>
+                  <p className="text-sm text-gray-500">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </RadioGroup>
+      )
+    },
+    {
+      title: "How would you like to support athletes?",
+      subtitle: "Select all that apply",
+      icon: <Heart className="w-8 h-8" />,
+      content: (
+        <div className="grid grid-cols-2 gap-3">
+          {supportTypes.map(type => (
+            <label key={type} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+              answers.support_types.includes(type) ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <Checkbox 
+                checked={answers.support_types.includes(type)}
+                onCheckedChange={(checked) => {
+                  setAnswers(prev => ({
+                    ...prev,
+                    support_types: checked 
+                      ? [...prev.support_types, type]
+                      : prev.support_types.filter(s => s !== type)
+                  }));
+                }}
+              />
+              <span className="font-medium text-sm">{type}</span>
+            </label>
+          ))}
+        </div>
+      )
+    },
+    {
+      title: "What values matter most to you?",
+      subtitle: "We'll prioritize athletes who demonstrate these qualities",
+      icon: <Sparkles className="w-8 h-8" />,
+      content: (
+        <div className="grid grid-cols-2 gap-3">
+          {values.map(value => (
+            <label key={value} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+              answers.values_important.includes(value) ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <Checkbox 
+                checked={answers.values_important.includes(value)}
+                onCheckedChange={(checked) => {
+                  setAnswers(prev => ({
+                    ...prev,
+                    values_important: checked 
+                      ? [...prev.values_important, value]
+                      : prev.values_important.filter(s => s !== value)
+                  }));
+                }}
+              />
+              <span className="font-medium text-sm">{value}</span>
+            </label>
+          ))}
+        </div>
+      )
+    },
+    {
+      title: "What are your sponsorship goals?",
+      subtitle: "Select all that apply",
+      icon: <Target className="w-8 h-8" />,
+      content: (
+        <div className="space-y-3">
+          {goals.map(goal => (
+            <label key={goal} className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition ${
+              answers.sponsorship_goals.includes(goal) ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <Checkbox 
+                checked={answers.sponsorship_goals.includes(goal)}
+                onCheckedChange={(checked) => {
+                  setAnswers(prev => ({
+                    ...prev,
+                    sponsorship_goals: checked 
+                      ? [...prev.sponsorship_goals, goal]
+                      : prev.sponsorship_goals.filter(s => s !== goal)
+                  }));
+                }}
+              />
+              <span className="font-medium">{goal}</span>
+            </label>
+          ))}
+        </div>
+      )
+    },
+    {
+      title: "How long do you want to commit?",
+      subtitle: "This helps us find the right match for your timeline",
+      icon: <Target className="w-8 h-8" />,
+      content: (
+        <RadioGroup value={answers.commitment_level} onValueChange={(v) => setAnswers({...answers, commitment_level: v})}>
+          <div className="space-y-3">
+            {[
+              { value: 'one_time', label: 'One-time Support', desc: 'Single donation or equipment purchase' },
+              { value: 'short_term', label: 'Short-term (1-3 months)', desc: 'Help with a specific event or season' },
+              { value: 'long_term', label: 'Long-term (6-12 months)', desc: 'Sustained support through their journey' },
+              { value: 'ongoing', label: 'Ongoing Partnership', desc: 'Build a lasting relationship' }
+            ].map(opt => (
+              <label key={opt.value} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition ${
+                answers.commitment_level === opt.value ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <RadioGroupItem value={opt.value} />
+                <div>
+                  <p className="font-semibold">{opt.label}</p>
+                  <p className="text-sm text-gray-500">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </RadioGroup>
+      )
+    }
+  ];
+
+  const handleNext = () => {
+    if (step < questions.length - 1) {
+      setStep(step + 1);
+    } else {
+      saveMutation.mutate(answers);
+    }
+  };
+
+  const progress = ((step + 1) / questions.length) * 100;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3 text-orange-500 mb-2">
+            {questions[step].icon}
+          </div>
+          <DialogTitle className="text-2xl">{questions[step].title}</DialogTitle>
+          <DialogDescription>{questions[step].subtitle}</DialogDescription>
+        </DialogHeader>
+        
+        <Progress value={progress} className="h-2 mb-4" />
+        
+        <div className="py-4">
+          {questions[step].content}
+        </div>
+
+        <div className="flex justify-between pt-4 border-t">
+          <Button 
+            variant="outline" 
+            onClick={() => setStep(step - 1)}
+            disabled={step === 0}
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Back
+          </Button>
+          <Button 
+            onClick={handleNext}
+            className="bg-orange-500 hover:bg-orange-600"
+            disabled={saveMutation.isPending}
+          >
+            {step === questions.length - 1 ? (
+              saveMutation.isPending ? 'Saving...' : <>Complete <Check className="w-4 h-4 ml-1" /></>
+            ) : (
+              <>Next <ChevronRight className="w-4 h-4 ml-1" /></>
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
