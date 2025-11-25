@@ -16,7 +16,7 @@ export default function Home() {
         
         <div className="relative max-w-6xl mx-auto py-28 px-6 text-center">
           <div className="inline-block mb-6 px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-sm font-semibold border border-white/30">
-            🚀 The Future of Athletic Sponsorship
+            The Future of Athletic Sponsorship
           </div>
           <h1 className="text-5xl md:text-7xl font-black mb-6 leading-tight">
             Discover Tomorrow's<br/>Champions Today
